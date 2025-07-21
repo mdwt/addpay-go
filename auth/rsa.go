@@ -18,25 +18,25 @@ type RSAAuth struct {
 }
 
 // NewRSAAuth creates a new RSA authentication handler
-func NewRSAAuth(privateKeyPEM, publicKeyPEM []byte) (*RSAAuth, error) {
+func NewRSAAuth(privateKeyPEM, publicKeyPEM []byte) (RSAAuth, error) {
 	privateKey, err := parsePrivateKey(privateKeyPEM)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
+		return RSAAuth{}, fmt.Errorf("failed to parse private key: %w", err)
 	}
 
 	publicKey, err := parsePublicKey(publicKeyPEM)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse public key: %w", err)
+		return RSAAuth{}, fmt.Errorf("failed to parse public key: %w", err)
 	}
 
-	return &RSAAuth{
+	return RSAAuth{
 		privateKey: privateKey,
 		publicKey:  publicKey,
 	}, nil
 }
 
 // Sign signs data using the private key
-func (r *RSAAuth) Sign(data []byte) (string, error) {
+func (r RSAAuth) Sign(data []byte) (string, error) {
 	hash := sha256.Sum256(data)
 	signature, err := rsa.SignPKCS1v15(rand.Reader, r.privateKey, crypto.SHA256, hash[:])
 	if err != nil {
@@ -46,7 +46,7 @@ func (r *RSAAuth) Sign(data []byte) (string, error) {
 }
 
 // Verify verifies a signature using the public key
-func (r *RSAAuth) Verify(data []byte, signature string) error {
+func (r RSAAuth) Verify(data []byte, signature string) error {
 	sig, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
 		return fmt.Errorf("failed to decode signature: %w", err)
@@ -61,7 +61,7 @@ func (r *RSAAuth) Verify(data []byte, signature string) error {
 }
 
 // Encrypt encrypts data using the public key
-func (r *RSAAuth) Encrypt(data []byte) (string, error) {
+func (r RSAAuth) Encrypt(data []byte) (string, error) {
 	encrypted, err := rsa.EncryptPKCS1v15(rand.Reader, r.publicKey, data)
 	if err != nil {
 		return "", fmt.Errorf("failed to encrypt data: %w", err)
@@ -70,7 +70,7 @@ func (r *RSAAuth) Encrypt(data []byte) (string, error) {
 }
 
 // Decrypt decrypts data using the private key
-func (r *RSAAuth) Decrypt(encryptedData string) ([]byte, error) {
+func (r RSAAuth) Decrypt(encryptedData string) ([]byte, error) {
 	data, err := base64.StdEncoding.DecodeString(encryptedData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode encrypted data: %w", err)

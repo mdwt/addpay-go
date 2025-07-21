@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/example/addpay-go"
-	"github.com/example/addpay-go/types"
+	"github.com/mdwt/addpay-go"
+	"github.com/mdwt/addpay-go/types"
 )
 
 func main() {
@@ -21,13 +21,13 @@ your-gateway-public-key-here
 -----END PUBLIC KEY-----`
 
 	// Create client configuration
-	config := &types.Config{
+	config := types.Config{
 		AppID:              "your-app-id",
 		GatewayURL:         "https://api.paycloud.africa",
 		MerchantPrivateKey: []byte(merchantPrivateKey),
 		GatewayPublicKey:   []byte(gatewayPublicKey),
 		Timeout:            30 * time.Second,
-		Logger:             addpay.NewDefaultLogger(addpay.INFO),
+		Logger:             addpay.NewDefaultLogger(),
 	}
 
 	// Create the AddPay client
@@ -40,7 +40,7 @@ your-gateway-public-key-here
 	token := "tok_1234567890abcdef" // This would be a token from a previous transaction
 
 	fmt.Printf("🔍 Querying token: %s\n", token)
-	tokenQuery := &types.QueryTokenRequest{
+	tokenQuery := types.QueryTokenRequest{
 		Token: token,
 	}
 
@@ -58,10 +58,10 @@ your-gateway-public-key-here
 	// Now process a tokenized payment
 	fmt.Printf("\n💳 Processing tokenized payment...\n")
 
-	paymentReq := &types.TokenizedPayRequest{
+	paymentReq := types.TokenizedPayRequest{
 		MerchantNo:      "MERCHANT001",                                 // Your merchant number
 		StoreNo:         "STORE001",                                    // Your store number
-		MerchantOrderNo: generateOrderNumber(),                         // Unique order number
+		MerchantOrderNo: generatePaymentOrderNumber(),                  // Unique order number
 		Token:           token,                                         // Payment token from previous transaction
 		PriceCurrency:   "USD",                                         // Currency code
 		OrderAmount:     29.99,                                         // Amount to charge
@@ -89,6 +89,6 @@ your-gateway-public-key-here
 	}
 }
 
-func generateOrderNumber() string {
+func generatePaymentOrderNumber() string {
 	return fmt.Sprintf("ORDER-%d", time.Now().Unix())
 }

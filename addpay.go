@@ -36,19 +36,19 @@
 package addpay
 
 import (
-	"github.com/example/addpay-go/client"
-	"github.com/example/addpay-go/logger"
-	"github.com/example/addpay-go/types"
+	"github.com/mdwt/addpay-go/client"
+	"github.com/mdwt/addpay-go/logger"
+	"github.com/mdwt/addpay-go/types"
 )
 
 // NewClient creates a new AddPay API client
-func NewClient(config *types.Config) (*client.Client, error) {
+func NewClient(config types.Config) (client.Client, error) {
 	return client.New(config)
 }
 
-// NewDefaultLogger creates a new default logger with the specified level
-func NewDefaultLogger(level logger.Level) types.Logger {
-	return logger.NewDefaultLogger(level)
+// NewDefaultLogger creates a new default logger that outputs JSON logs
+func NewDefaultLogger() types.Logger {
+	return logger.NewDefaultLogger()
 }
 
 // NewNoOpLogger creates a new no-op logger that discards all log messages
@@ -56,10 +56,3 @@ func NewNoOpLogger() types.Logger {
 	return logger.NewNoOpLogger()
 }
 
-// Log levels
-const (
-	DEBUG = logger.DEBUG
-	INFO  = logger.INFO
-	WARN  = logger.WARN
-	ERROR = logger.ERROR
-)

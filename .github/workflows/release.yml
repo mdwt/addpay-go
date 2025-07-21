@@ -1,0 +1,171 @@
+name: Auto Release Go Module
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '.github/**'
+      - '*.md'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Verify and tidy modules
+        run: |
+          go mod verify
+          go mod tidy
+
+      - name: Run tests
+        run: |
+          go test -v ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Build (if applicable)
+        run: |
+          if [ -f "main.go" ]; then
+            go build -v ./...
+          fi
+
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          # Get the latest tag, default to v0.0.0 if none exists
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "Latest tag found: $LATEST_TAG"
+
+      - name: Calculate next version
+        id: next_version
+        run: |
+          LATEST_TAG="${{ steps.get_tag.outputs.latest_tag }}"
+          
+          # Remove 'v' prefix and split version
+          VERSION=${LATEST_TAG#v}
+          IFS='.' read -ra VERSION_PARTS <<< "$VERSION"
+          
+          MAJOR=${VERSION_PARTS[0]:-0}
+          MINOR=${VERSION_PARTS[1]:-0}
+          PATCH=${VERSION_PARTS[2]:-0}
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Next version will be: $NEW_VERSION"
+
+      - name: Check if version already exists
+        id: check_version
+        run: |
+          NEW_VERSION="${{ steps.next_version.outputs.new_version }}"
+          if git rev-parse "$NEW_VERSION" >/dev/null 2>&1; then
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "Version $NEW_VERSION already exists, skipping release"
+          else
+            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "Version $NEW_VERSION is new, proceeding with release"
+          fi
+
+      - name: Create and push tag
+        if: steps.check_version.outputs.version_exists == 'false'
+        run: |
+          NEW_VERSION="${{ steps.next_version.outputs.new_version }}"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create and push tag
+          git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"
+          git push origin "$NEW_VERSION"
+          
+          echo "Created and pushed tag: $NEW_VERSION"
+
+      - name: Generate release notes
+        if: steps.check_version.outputs.version_exists == 'false'
+        id: release_notes
+        run: |
+          NEW_VERSION="${{ steps.next_version.outputs.new_version }}"
+          LATEST_TAG="${{ steps.get_tag.outputs.latest_tag }}"
+          
+          # Generate release notes from commits
+          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+            RELEASE_NOTES="Initial release"
+          else
+            RELEASE_NOTES=$(git log ${LATEST_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+            if [ -z "$RELEASE_NOTES" ]; then
+              RELEASE_NOTES="- Minor updates and improvements"
+            fi
+          fi
+          
+          # Escape newlines for GitHub Actions
+          RELEASE_NOTES="${RELEASE_NOTES//'%'/'%25'}"
+          RELEASE_NOTES="${RELEASE_NOTES//$'\n'/'%0A'}"
+          RELEASE_NOTES="${RELEASE_NOTES//$'\r'/'%0D'}"
+          
+          echo "release_notes=$RELEASE_NOTES" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        if: steps.check_version.outputs.version_exists == 'false'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.next_version.outputs.new_version }}
+          release_name: Release ${{ steps.next_version.outputs.new_version }}
+          body: |
+            ## Changes
+            ${{ steps.release_notes.outputs.release_notes }}
+            
+            ## Installation
+            ```bash
+            go get github.com/${{ github.repository }}@${{ steps.next_version.outputs.new_version }}
+            ```
+          draft: false
+          prerelease: false
+
+      - name: Verify module availability
+        if: steps.check_version.outputs.version_exists == 'false'
+        run: |
+          NEW_VERSION="${{ steps.next_version.outputs.new_version }}"
+          MODULE_NAME="github.com/${{ github.repository }}"
+          
+          echo "Waiting for Go proxy to pick up the new version..."
+          sleep 30
+          
+          # Try to fetch the new version
+          for i in {1..5}; do
+            if go list -m "${MODULE_NAME}@${NEW_VERSION}"; then
+              echo "✅ Module ${MODULE_NAME}@${NEW_VERSION} is now available!"
+              break
+            else
+              echo "⏳ Attempt $i: Module not yet available, waiting..."
+              sleep 30
+            fi
+          done

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/addpay-go"
-	"github.com/example/addpay-go/types"
+	"github.com/mdwt/addpay-go"
+	"github.com/mdwt/addpay-go/types"
 )
 
 // Mock RSA keys for testing
@@ -76,7 +76,7 @@ func TestHostedCheckoutIntegration(t *testing.T) {
 	defer testServer.Close()
 
 	// Create client configuration
-	config := &types.Config{
+	config := types.Config{
 		AppID:              "test-app-id",
 		GatewayURL:         testServer.URL,
 		MerchantPrivateKey: []byte(testMerchantPrivateKey),
@@ -92,7 +92,7 @@ func TestHostedCheckoutIntegration(t *testing.T) {
 	}
 
 	// Create checkout request with example payload
-	checkoutReq := &types.CheckoutRequest{
+	checkoutReq := types.CheckoutRequest{
 		MerchantNo:      "MERCHANT001",
 		StoreNo:         "STORE001",
 		MerchantOrderNo: "ORDER-" + time.Now().Format("20060102150405"),
@@ -149,7 +149,7 @@ func TestQueryTokenIntegration(t *testing.T) {
 	defer testServer.Close()
 
 	// Create client configuration
-	config := &types.Config{
+	config := types.Config{
 		AppID:              "test-app-id",
 		GatewayURL:         testServer.URL,
 		MerchantPrivateKey: []byte(testMerchantPrivateKey),
@@ -165,7 +165,7 @@ func TestQueryTokenIntegration(t *testing.T) {
 	}
 
 	// Create query token request
-	tokenReq := &types.QueryTokenRequest{
+	tokenReq := types.QueryTokenRequest{
 		Token: "tok_1234567890abcdef",
 	}
 
@@ -209,7 +209,7 @@ func TestTokenizedPayIntegration(t *testing.T) {
 	defer testServer.Close()
 
 	// Create client configuration
-	config := &types.Config{
+	config := types.Config{
 		AppID:              "test-app-id",
 		GatewayURL:         testServer.URL,
 		MerchantPrivateKey: []byte(testMerchantPrivateKey),
@@ -225,7 +225,7 @@ func TestTokenizedPayIntegration(t *testing.T) {
 	}
 
 	// Create tokenized payment request
-	payReq := &types.TokenizedPayRequest{
+	payReq := types.TokenizedPayRequest{
 		MerchantNo:      "MERCHANT001",
 		StoreNo:         "STORE001",
 		MerchantOrderNo: "ORDER-" + time.Now().Format("20060102150405"),
@@ -277,7 +277,7 @@ func TestDebitCheckIntegration(t *testing.T) {
 	defer testServer.Close()
 
 	// Create client configuration
-	config := &types.Config{
+	config := types.Config{
 		AppID:              "test-app-id",
 		GatewayURL:         testServer.URL,
 		MerchantPrivateKey: []byte(testMerchantPrivateKey),
@@ -293,7 +293,7 @@ func TestDebitCheckIntegration(t *testing.T) {
 	}
 
 	// Create debit check request
-	debitReq := &types.DebitCheckRequest{
+	debitReq := types.DebitCheckRequest{
 		MerchantNo:      "MERCHANT001",
 		StoreNo:         "STORE001",
 		MerchantOrderNo: "DEBIT-" + time.Now().Format("20060102150405"),
@@ -328,19 +328,14 @@ func TestDebitCheckIntegration(t *testing.T) {
 func TestClientConfigValidation(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *types.Config
+		config  types.Config
 		wantErr bool
 		errMsg  string
 	}{
-		{
-			name:    "nil config",
-			config:  nil,
-			wantErr: true,
-			errMsg:  "config cannot be nil",
-		},
+		// Note: Can't test nil config anymore since we use value types
 		{
 			name: "missing app_id",
-			config: &types.Config{
+			config: types.Config{
 				GatewayURL:         "https://api.addpay.com",
 				MerchantPrivateKey: []byte(testMerchantPrivateKey),
 				GatewayPublicKey:   []byte(testGatewayPublicKey),
@@ -350,7 +345,7 @@ func TestClientConfigValidation(t *testing.T) {
 		},
 		{
 			name: "missing gateway_url",
-			config: &types.Config{
+			config: types.Config{
 				AppID:              "test-app-id",
 				MerchantPrivateKey: []byte(testMerchantPrivateKey),
 				GatewayPublicKey:   []byte(testGatewayPublicKey),
@@ -360,7 +355,7 @@ func TestClientConfigValidation(t *testing.T) {
 		},
 		{
 			name: "missing merchant private key",
-			config: &types.Config{
+			config: types.Config{
 				AppID:            "test-app-id",
 				GatewayURL:       "https://api.addpay.com",
 				GatewayPublicKey: []byte(testGatewayPublicKey),
@@ -370,7 +365,7 @@ func TestClientConfigValidation(t *testing.T) {
 		},
 		{
 			name: "missing gateway public key",
-			config: &types.Config{
+			config: types.Config{
 				AppID:              "test-app-id",
 				GatewayURL:         "https://api.addpay.com",
 				MerchantPrivateKey: []byte(testMerchantPrivateKey),
@@ -380,7 +375,7 @@ func TestClientConfigValidation(t *testing.T) {
 		},
 		{
 			name: "valid config",
-			config: &types.Config{
+			config: types.Config{
 				AppID:              "test-app-id",
 				GatewayURL:         "https://api.addpay.com",
 				MerchantPrivateKey: []byte(testMerchantPrivateKey),

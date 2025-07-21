@@ -9,39 +9,35 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/example/addpay-go/auth"
-	"github.com/example/addpay-go/logger"
-	"github.com/example/addpay-go/types"
+	"github.com/mdwt/addpay-go/auth"
+	"github.com/mdwt/addpay-go/logger"
+	"github.com/mdwt/addpay-go/types"
 )
 
 // Client represents the AddPay API client
 type Client struct {
-	config     *types.Config
-	httpClient *http.Client
-	auth       *auth.RSAAuth
+	config     types.Config
+	httpClient http.Client
+	auth       auth.RSAAuth
 	logger     types.Logger
 }
 
 // New creates a new AddPay client
-func New(config *types.Config) (*Client, error) {
-	if config == nil {
-		return nil, fmt.Errorf("config cannot be nil")
-	}
-
+func New(config types.Config) (Client, error) {
 	if config.AppID == "" {
-		return nil, fmt.Errorf("app_id is required")
+		return Client{}, fmt.Errorf("app_id is required")
 	}
 
 	if config.GatewayURL == "" {
-		return nil, fmt.Errorf("gateway_url is required")
+		return Client{}, fmt.Errorf("gateway_url is required")
 	}
 
 	if len(config.MerchantPrivateKey) == 0 {
-		return nil, fmt.Errorf("merchant_private_key is required")
+		return Client{}, fmt.Errorf("merchant_private_key is required")
 	}
 
 	if len(config.GatewayPublicKey) == 0 {
-		return nil, fmt.Errorf("gateway_public_key is required")
+		return Client{}, fmt.Errorf("gateway_public_key is required")
 	}
 
 	// Set default timeout if not provided
@@ -51,18 +47,18 @@ func New(config *types.Config) (*Client, error) {
 
 	// Set default logger if not provided
 	if config.Logger == nil {
-		config.Logger = logger.NewDefaultLogger(logger.INFO)
+		config.Logger = logger.NewDefaultLogger()
 	}
 
 	// Initialize RSA authentication
 	rsaAuth, err := auth.NewRSAAuth(config.MerchantPrivateKey, config.GatewayPublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize RSA auth: %w", err)
+		return Client{}, fmt.Errorf("failed to initialize RSA auth: %w", err)
 	}
 
-	client := &Client{
+	client := Client{
 		config: config,
-		httpClient: &http.Client{
+		httpClient: http.Client{
 			Timeout: config.Timeout,
 		},
 		auth:   rsaAuth,
@@ -73,71 +69,96 @@ func New(config *types.Config) (*Client, error) {
 }
 
 // HostedCheckout creates a hosted checkout request
-func (c *Client) HostedCheckout(ctx context.Context, req *types.CheckoutRequest) (*types.CheckoutResponse, error) {
-	c.logger.Info("Creating hosted checkout", types.Field{Key: "merchant_order_no", Value: req.MerchantOrderNo})
+func (c Client) HostedCheckout(ctx context.Context, req types.CheckoutRequest) (types.CheckoutResponse, error) {
+	c.logger.Info("Creating hosted checkout",
+		"merchant_order_no", req.MerchantOrderNo,
+		"order_amount", req.OrderAmount,
+		"currency", req.PriceCurrency)
 
-	response := &types.CheckoutResponse{}
-	err := c.makeRequest(ctx, "POST", "/api/entry/checkout", req, response)
+	var response types.CheckoutResponse
+	err := c.makeRequest(ctx, "POST", "/api/entry/checkout", req, &response)
 	if err != nil {
-		c.logger.Error("Hosted checkout failed", types.Field{Key: "error", Value: err.Error()})
-		return nil, err
+		c.logger.Error("Hosted checkout failed",
+			"error", err.Error(),
+			"merchant_order_no", req.MerchantOrderNo)
+		return types.CheckoutResponse{}, err
 	}
 
-	c.logger.Info("Hosted checkout created successfully", types.Field{Key: "pay_url", Value: response.PayURL})
+	c.logger.Info("Hosted checkout created successfully",
+		"pay_url", response.PayURL,
+		"merchant_order_no", req.MerchantOrderNo)
 	return response, nil
 }
 
 // QueryToken queries token information
-func (c *Client) QueryToken(ctx context.Context, req *types.QueryTokenRequest) (*types.QueryTokenResponse, error) {
-	c.logger.Info("Querying token", types.Field{Key: "token", Value: req.Token})
+func (c Client) QueryToken(ctx context.Context, req types.QueryTokenRequest) (types.QueryTokenResponse, error) {
+	c.logger.Info("Querying token",
+		"token", "[REDACTED]")
 
-	response := &types.QueryTokenResponse{}
-	err := c.makeRequest(ctx, "POST", "/api/entry/query-token", req, response)
+	var response types.QueryTokenResponse
+	err := c.makeRequest(ctx, "POST", "/api/entry/query-token", req, &response)
 	if err != nil {
-		c.logger.Error("Query token failed", types.Field{Key: "error", Value: err.Error()})
-		return nil, err
+		c.logger.Error("Query token failed",
+			"error", err.Error(),
+			"token", "[REDACTED]")
+		return types.QueryTokenResponse{}, err
 	}
 
-	c.logger.Info("Token queried successfully", types.Field{Key: "status", Value: response.TokenStatus})
+	c.logger.Info("Token queried successfully",
+		"status", response.TokenStatus,
+		"token", "[REDACTED]")
 	return response, nil
 }
 
 // TokenizedPay processes a tokenized payment
-func (c *Client) TokenizedPay(ctx context.Context, req *types.TokenizedPayRequest) (*types.TokenizedPayResponse, error) {
-	c.logger.Info("Processing tokenized payment", types.Field{Key: "merchant_order_no", Value: req.MerchantOrderNo})
+func (c Client) TokenizedPay(ctx context.Context, req types.TokenizedPayRequest) (types.TokenizedPayResponse, error) {
+	c.logger.Info("Processing tokenized payment",
+		"merchant_order_no", req.MerchantOrderNo,
+		"token", "[REDACTED]",
+		"order_amount", req.OrderAmount)
 
-	response := &types.TokenizedPayResponse{}
-	err := c.makeRequest(ctx, "POST", "/api/entry/tokenized-pay", req, response)
+	var response types.TokenizedPayResponse
+	err := c.makeRequest(ctx, "POST", "/api/entry/tokenized-pay", req, &response)
 	if err != nil {
-		c.logger.Error("Tokenized payment failed", types.Field{Key: "error", Value: err.Error()})
-		return nil, err
+		c.logger.Error("Tokenized payment failed",
+			"error", err.Error(),
+			"merchant_order_no", req.MerchantOrderNo)
+		return types.TokenizedPayResponse{}, err
 	}
 
 	c.logger.Info("Tokenized payment processed successfully",
-		types.Field{Key: "transaction_id", Value: response.TransactionID},
-		types.Field{Key: "status", Value: response.TransactionStatus})
+		"transaction_id", response.TransactionID,
+		"status", response.TransactionStatus,
+		"merchant_order_no", req.MerchantOrderNo)
 	return response, nil
 }
 
 // DebitCheck creates a debit check request
-func (c *Client) DebitCheck(ctx context.Context, req *types.DebitCheckRequest) (*types.DebitCheckResponse, error) {
-	c.logger.Info("Creating debit check", types.Field{Key: "merchant_order_no", Value: req.MerchantOrderNo})
+func (c Client) DebitCheck(ctx context.Context, req types.DebitCheckRequest) (types.DebitCheckResponse, error) {
+	c.logger.Info("Creating debit check",
+		"merchant_order_no", req.MerchantOrderNo,
+		"account_number", "[REDACTED]",
+		"bank_code", req.BankCode,
+		"amount", req.Amount)
 
-	response := &types.DebitCheckResponse{}
-	err := c.makeRequest(ctx, "POST", "/api/entry/debit-check", req, response)
+	var response types.DebitCheckResponse
+	err := c.makeRequest(ctx, "POST", "/api/entry/debit-check", req, &response)
 	if err != nil {
-		c.logger.Error("Debit check failed", types.Field{Key: "error", Value: err.Error()})
-		return nil, err
+		c.logger.Error("Debit check failed",
+			"error", err.Error(),
+			"merchant_order_no", req.MerchantOrderNo)
+		return types.DebitCheckResponse{}, err
 	}
 
 	c.logger.Info("Debit check created successfully",
-		types.Field{Key: "mandate_id", Value: response.MandateID},
-		types.Field{Key: "status", Value: response.MandateStatus})
+		"mandate_id", response.MandateID,
+		"status", response.MandateStatus,
+		"merchant_order_no", req.MerchantOrderNo)
 	return response, nil
 }
 
 // makeRequest makes an HTTP request to the AddPay API
-func (c *Client) makeRequest(ctx context.Context, method, path string, request, response interface{}) error {
+func (c Client) makeRequest(ctx context.Context, method, path string, request, response interface{}) error {
 	// Marshal request body
 	var body []byte
 	var err error
@@ -172,9 +193,9 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, request, 
 
 	// Log request details
 	c.logger.Debug("Making API request",
-		types.Field{Key: "method", Value: method},
-		types.Field{Key: "url", Value: url},
-		types.Field{Key: "body_length", Value: len(body)})
+		"method", method,
+		"url", url,
+		"body_length", len(body))
 
 	// Make the request
 	resp, err := c.httpClient.Do(req)
@@ -191,13 +212,13 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, request, 
 
 	// Log response details
 	c.logger.Debug("Received API response",
-		types.Field{Key: "status_code", Value: resp.StatusCode},
-		types.Field{Key: "body_length", Value: len(respBody)})
+		"status_code", resp.StatusCode,
+		"body_length", len(respBody))
 
 	// Check for HTTP errors
 	if resp.StatusCode >= 400 {
 		var apiResp types.APIResponse
-		if err := json.Unmarshal(respBody, &apiResp); err == nil && apiResp.Error != nil {
+		if err := json.Unmarshal(respBody, &apiResp); err == nil && apiResp.Error.Message != "" {
 			return apiResp.Error
 		}
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(respBody))
@@ -208,7 +229,7 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, request, 
 		// Try to unmarshal as APIResponse first
 		var apiResp types.APIResponse
 		if err := json.Unmarshal(respBody, &apiResp); err == nil {
-			if !apiResp.Success && apiResp.Error != nil {
+			if !apiResp.Success && apiResp.Error.Message != "" {
 				return apiResp.Error
 			}
 			if apiResp.Data != nil {
@@ -233,11 +254,13 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, request, 
 }
 
 // SetLogger allows changing the logger after client creation
-func (c *Client) SetLogger(logger types.Logger) {
+// Returns a new client with the updated logger
+func (c Client) SetLogger(logger types.Logger) Client {
 	c.logger = logger
+	return c
 }
 
 // GetConfig returns the client configuration
-func (c *Client) GetConfig() *types.Config {
+func (c Client) GetConfig() types.Config {
 	return c.config
 }

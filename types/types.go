@@ -2,6 +2,14 @@ package types
 
 import "time"
 
+// Logger is a simple logging interface that can be implemented by any logger
+type Logger interface {
+	Debug(msg string, keysAndValues ...interface{})
+	Info(msg string, keysAndValues ...interface{})
+	Warn(msg string, keysAndValues ...interface{})
+	Error(msg string, keysAndValues ...interface{})
+}
+
 // Config represents the configuration for AddPay client
 type Config struct {
 	AppID              string
@@ -9,22 +17,9 @@ type Config struct {
 	MerchantPrivateKey []byte
 	GatewayPublicKey   []byte
 	Timeout            time.Duration
-	Logger             Logger
+	Logger             Logger // Optional: uses default slog logger if nil
 }
 
-// Logger defines the interface for logging
-type Logger interface {
-	Debug(msg string, fields ...Field)
-	Info(msg string, fields ...Field)
-	Warn(msg string, fields ...Field)
-	Error(msg string, fields ...Field)
-}
-
-// Field represents a log field
-type Field struct {
-	Key   string
-	Value interface{}
-}
 
 // CheckoutRequest represents a hosted checkout request
 type CheckoutRequest struct {
@@ -104,7 +99,7 @@ type APIError struct {
 	Details string `json:"details,omitempty"`
 }
 
-func (e *APIError) Error() string {
+func (e APIError) Error() string {
 	return e.Message
 }
 
@@ -112,5 +107,5 @@ func (e *APIError) Error() string {
 type APIResponse struct {
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data,omitempty"`
-	Error   *APIError   `json:"error,omitempty"`
+	Error   APIError    `json:"error,omitempty"`
 }

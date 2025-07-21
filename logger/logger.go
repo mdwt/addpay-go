@@ -1,97 +1,61 @@
 package logger
 
 import (
-	"fmt"
-	"log"
+	"log/slog"
 	"os"
-	"time"
 
-	"github.com/example/addpay-go/types"
+	"github.com/mdwt/addpay-go/types"
 )
 
-// Level represents log levels
-type Level int
-
-const (
-	DEBUG Level = iota
-	INFO
-	WARN
-	ERROR
-)
-
-// DefaultLogger is a simple implementation of the Logger interface
-type DefaultLogger struct {
-	level  Level
-	logger *log.Logger
+// SlogLogger wraps slog.Logger to implement the simple Logger interface
+type SlogLogger struct {
+	logger *slog.Logger
 }
 
-// NewDefaultLogger creates a new default logger
-func NewDefaultLogger(level Level) *DefaultLogger {
-	return &DefaultLogger{
-		level:  level,
-		logger: log.New(os.Stdout, "", log.LstdFlags),
-	}
+// NewDefaultLogger creates a default slog-based logger
+func NewDefaultLogger() types.Logger {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	return &SlogLogger{logger: logger}
 }
 
-// Debug logs a debug message
-func (l *DefaultLogger) Debug(msg string, fields ...types.Field) {
-	if l.level <= DEBUG {
-		l.log("DEBUG", msg, fields...)
-	}
+// Debug logs a debug message with key-value pairs
+func (s *SlogLogger) Debug(msg string, keysAndValues ...interface{}) {
+	s.logger.Debug(msg, keysAndValues...)
 }
 
-// Info logs an info message
-func (l *DefaultLogger) Info(msg string, fields ...types.Field) {
-	if l.level <= INFO {
-		l.log("INFO", msg, fields...)
-	}
+// Info logs an info message with key-value pairs
+func (s *SlogLogger) Info(msg string, keysAndValues ...interface{}) {
+	s.logger.Info(msg, keysAndValues...)
 }
 
-// Warn logs a warning message
-func (l *DefaultLogger) Warn(msg string, fields ...types.Field) {
-	if l.level <= WARN {
-		l.log("WARN", msg, fields...)
-	}
+// Warn logs a warning message with key-value pairs
+func (s *SlogLogger) Warn(msg string, keysAndValues ...interface{}) {
+	s.logger.Warn(msg, keysAndValues...)
 }
 
-// Error logs an error message
-func (l *DefaultLogger) Error(msg string, fields ...types.Field) {
-	if l.level <= ERROR {
-		l.log("ERROR", msg, fields...)
-	}
+// Error logs an error message with key-value pairs
+func (s *SlogLogger) Error(msg string, keysAndValues ...interface{}) {
+	s.logger.Error(msg, keysAndValues...)
 }
 
-// log formats and logs a message with fields
-func (l *DefaultLogger) log(level, msg string, fields ...types.Field) {
-	timestamp := time.Now().Format(time.RFC3339)
-	logMsg := fmt.Sprintf("[%s] %s: %s", timestamp, level, msg)
-
-	if len(fields) > 0 {
-		logMsg += " |"
-		for _, field := range fields {
-			logMsg += fmt.Sprintf(" %s=%v", field.Key, field.Value)
-		}
-	}
-
-	l.logger.Println(logMsg)
-}
-
-// NoOpLogger is a logger that does nothing
+// NoOpLogger discards all log messages
 type NoOpLogger struct{}
 
-// NewNoOpLogger creates a new no-op logger
-func NewNoOpLogger() *NoOpLogger {
+// NewNoOpLogger creates a logger that discards all messages
+func NewNoOpLogger() types.Logger {
 	return &NoOpLogger{}
 }
 
 // Debug does nothing
-func (l *NoOpLogger) Debug(msg string, fields ...types.Field) {}
+func (n *NoOpLogger) Debug(msg string, keysAndValues ...interface{}) {}
 
 // Info does nothing
-func (l *NoOpLogger) Info(msg string, fields ...types.Field) {}
+func (n *NoOpLogger) Info(msg string, keysAndValues ...interface{}) {}
 
 // Warn does nothing
-func (l *NoOpLogger) Warn(msg string, fields ...types.Field) {}
+func (n *NoOpLogger) Warn(msg string, keysAndValues ...interface{}) {}
 
 // Error does nothing
-func (l *NoOpLogger) Error(msg string, fields ...types.Field) {}
+func (n *NoOpLogger) Error(msg string, keysAndValues ...interface{}) {}

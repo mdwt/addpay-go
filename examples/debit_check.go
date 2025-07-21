@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/example/addpay-go"
-	"github.com/example/addpay-go/types"
+	"github.com/mdwt/addpay-go"
+	"github.com/mdwt/addpay-go/types"
 )
 
 func main() {
@@ -21,13 +21,13 @@ your-gateway-public-key-here
 -----END PUBLIC KEY-----`
 
 	// Create client configuration
-	config := &types.Config{
+	config := types.Config{
 		AppID:              "your-app-id",
 		GatewayURL:         "https://api.paycloud.africa",
 		MerchantPrivateKey: []byte(merchantPrivateKey),
 		GatewayPublicKey:   []byte(gatewayPublicKey),
 		Timeout:            30 * time.Second,
-		Logger:             addpay.NewDefaultLogger(addpay.INFO),
+		Logger:             addpay.NewDefaultLogger(),
 	}
 
 	// Create the AddPay client
@@ -39,7 +39,7 @@ your-gateway-public-key-here
 	// Create a debit check request
 	fmt.Printf("🏦 Creating debit check mandate...\n")
 
-	debitReq := &types.DebitCheckRequest{
+	debitReq := types.DebitCheckRequest{
 		MerchantNo:      "MERCHANT001",                                 // Your merchant number
 		StoreNo:         "STORE001",                                    // Your store number
 		MerchantOrderNo: generateMandateNumber(),                       // Unique mandate reference
