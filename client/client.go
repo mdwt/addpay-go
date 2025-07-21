@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/mdwt/addpay-go/auth"
@@ -76,7 +78,7 @@ func (c Client) HostedCheckout(ctx context.Context, req types.CheckoutRequest) (
 		"currency", req.PriceCurrency)
 
 	var response types.CheckoutResponse
-	err := c.makeRequest(ctx, "POST", "/api/entry/checkout", req, &response)
+	err := c.makeRequest(ctx, "POST", "/checkout", req, &response)
 	if err != nil {
 		c.logger.Error("Hosted checkout failed",
 			"error", err.Error(),
@@ -96,7 +98,7 @@ func (c Client) QueryToken(ctx context.Context, req types.QueryTokenRequest) (ty
 		"token", "[REDACTED]")
 
 	var response types.QueryTokenResponse
-	err := c.makeRequest(ctx, "POST", "/api/entry/query-token", req, &response)
+	err := c.makeRequest(ctx, "POST", "/query-token", req, &response)
 	if err != nil {
 		c.logger.Error("Query token failed",
 			"error", err.Error(),
@@ -118,7 +120,7 @@ func (c Client) TokenizedPay(ctx context.Context, req types.TokenizedPayRequest)
 		"order_amount", req.OrderAmount)
 
 	var response types.TokenizedPayResponse
-	err := c.makeRequest(ctx, "POST", "/api/entry/tokenized-pay", req, &response)
+	err := c.makeRequest(ctx, "POST", "/tokenized-pay", req, &response)
 	if err != nil {
 		c.logger.Error("Tokenized payment failed",
 			"error", err.Error(),
@@ -142,7 +144,7 @@ func (c Client) DebitCheck(ctx context.Context, req types.DebitCheckRequest) (ty
 		"amount", req.Amount)
 
 	var response types.DebitCheckResponse
-	err := c.makeRequest(ctx, "POST", "/api/entry/debit-check", req, &response)
+	err := c.makeRequest(ctx, "POST", "/debit-check", req, &response)
 	if err != nil {
 		c.logger.Error("Debit check failed",
 			"error", err.Error(),
@@ -157,45 +159,74 @@ func (c Client) DebitCheck(ctx context.Context, req types.DebitCheckRequest) (ty
 	return response, nil
 }
 
-// makeRequest makes an HTTP request to the AddPay API
+// makeRequest makes an HTTP request to the AddPay API using parameter-based signing
 func (c Client) makeRequest(ctx context.Context, method, path string, request, response interface{}) error {
-	// Marshal request body
-	var body []byte
-	var err error
+	// Convert request to parameters and add common parameters
+	params := make(map[string]interface{})
+
+	// Add common parameters
+	params["app_id"] = c.config.AppID
+	params["method"] = path // API method/endpoint
+	params["timestamp"] = strconv.FormatInt(time.Now().Unix(), 10)
+	params["sign_type"] = "RSA2"
+
+	// Add request-specific parameters
 	if request != nil {
-		body, err = json.Marshal(request)
+		requestParams, err := structToMap(request)
 		if err != nil {
-			return fmt.Errorf("failed to marshal request: %w", err)
+			return fmt.Errorf("failed to convert request to parameters: %w", err)
+		}
+		for k, v := range requestParams {
+			params[k] = v
 		}
 	}
 
-	// Create HTTP request
-	url := c.config.GatewayURL + path
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(body))
+	// Sign the parameters
+	signature, err := c.auth.SignParameters(params)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to sign request parameters: %w", err)
+	}
+	params["sign"] = signature
+
+	// For POST requests, send as form data (matching Java SDK)
+	var req *http.Request
+	if method == "POST" {
+		// Create form data
+		formData := url.Values{}
+		for key, value := range params {
+			formData.Set(key, fmt.Sprintf("%v", value))
+		}
+
+		req, err = http.NewRequestWithContext(ctx, method, c.config.GatewayURL+path,
+			bytes.NewBufferString(formData.Encode()))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	} else {
+		// For GET requests, add parameters to URL
+		baseURL := c.config.GatewayURL + path
+		formData := url.Values{}
+		for key, value := range params {
+			formData.Set(key, fmt.Sprintf("%v", value))
+		}
+		fullURL := baseURL + "?" + formData.Encode()
+
+		req, err = http.NewRequestWithContext(ctx, method, fullURL, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
+	// Set common headers
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "addpay-go/1.0.0")
-	req.Header.Set("X-App-ID", c.config.AppID)
-
-	// Sign the request if we have a body
-	if len(body) > 0 {
-		signature, err := c.auth.Sign(body)
-		if err != nil {
-			return fmt.Errorf("failed to sign request: %w", err)
-		}
-		req.Header.Set("X-Signature", signature)
-	}
 
 	// Log request details
 	c.logger.Debug("Making API request",
 		"method", method,
-		"url", url,
-		"body_length", len(body))
+		"url", req.URL.String(),
+		"params_count", len(params))
 
 	// Make the request
 	resp, err := c.httpClient.Do(req)
@@ -263,4 +294,36 @@ func (c Client) SetLogger(logger types.Logger) Client {
 // GetConfig returns the client configuration
 func (c Client) GetConfig() types.Config {
 	return c.config
+}
+
+// structToMap converts a struct to a map[string]interface{} using JSON tags
+func structToMap(s interface{}) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+
+	// Marshal to JSON and then unmarshal to map to respect JSON tags
+	jsonBytes, err := json.Marshal(s)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal struct: %w", err)
+	}
+
+	var tempMap map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &tempMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal to map: %w", err)
+	}
+
+	// Filter out nil values and convert to string representation
+	for key, value := range tempMap {
+		if value != nil {
+			result[key] = value
+		}
+	}
+
+	return result, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
